@@ -19,73 +19,167 @@ tidy=TRUE, tidy.opts=list(width.cutoff=60), R.options=list(max.print=100))
 
 ## Data Wrangling, Exploration, Visualization
 
-### Name and EID here
+### Arnav Patel (AP53888)
 
-#### Introduction 
+### Introduction 
 
-Paragraph or two introducing your datasets and variables, why they are interesting to you, etc.
+After 'scrolling til my eyes bled' through the different potential data sets that the R library has, I found one called States which is a data set that has data about Education in the US based on states from the year 1992. The data set had 8 variables - region (this includes ENC, East North Central; ESC, East South Central; MA, Mid-Atlantic; MTN, Mountain; NE, New England; PAC, Pacific; SA, South Atlantic; WNC, West North Central; WSC, West South Central), population, average SAT verbal and math scores, percent of high-schoolers who took the SAT, average amount of money spent on public education per student, and the average teacher's salary in the state. Wondering how these states would be correlated to political party, I made my own data set using data from Harvard's already existing databases that contained information on what the political party candidate each state voted on during the 1992 presidential election and how many electoral votes those states each had. These data sets interest me because I wanted to see if there was any correlation between spending on public education state by state and the states political affiliations. I hypothesized that the states that voted for the Democratic candidate, Bill Clinton, would be correlated with higher state spending on public education.
 
 ```{R}
 # read your datasets in here, e.g., with read_csv()
+library(tidyverse)
+library(carData)
 
+# First Dataset (Education and Related Statistics for the U.S. States in 1992)
+edu <- States
+edu <- edu %>% mutate(state = rownames(.))
+view(edu)
+glimpse(edu)
+
+# Second Dataset (How many electoral votes and what party was voted for in 1992)
+Election <- read_csv("Election.csv")
+view(Election)
+glimpse(Election)
 ```
 
-#### Tidying: Reshaping
-
-If your datasets are tidy already, demonstrate that you can reshape data with pivot wider/longer here (e.g., untidy and then retidy). Alternatively, it may be easier to wait until the wrangling section so you can reshape your summary statistics. Note here if you are going to do this.
+### Tidying: Reshaping
 
 ```{R}
 # your tidying code (if applicable; can also wait until wrangling section)
+edu_untidy <- edu %>% pivot_longer(cols = starts_with("SAT"), names_to ="test", values_to = "score") 
+view(edu_untidy)
+glimpse(edu_untidy)
+
+edu_tidy <- edu_untidy %>% pivot_wider(names_from = "test", values_from = "score")
+view(edu_tidy)
+glimpse(edu_tidy)
 ```
 
+Because my data sets were already tidy, I decided to first untidy them and then retidy them. What I did to untidy them is using pivot longer, I took the separate columns of SAT verbal and math scores and made one new column called "test" that would say whether the test being referred to in that row was either the SAT verbal or SAT math test and then another column called "score" that would have the score of the respective test in the row. This unnecessarily cause the data set to have exactly twice as many rows. In order to tidy it, I returned the data set back to the original set using pivot wider.
     
-#### Joining/Merging
+### Joining/Merging
 
 ```{R}
 # your joining code
+edu <- edu %>% rename(state_po = state)
+edu[7, 8] = "CT"
 
-# your joining code
+EduElect <- full_join(edu, Election, by = "state_po")
+view(EduElect)
+glimpse(EduElect)
+
+Inner <- inner_join(edu, Election, by = "state_po")
+view(Inner)
+glimpse(Inner)
+
+
+Anti <- anti_join(edu, Election, by = "state_po")
+view(Anti)
+glimpse(Anti)
 ```
 
-Discussions of joining here. Feel encouraged to break up into more than once code chunk and discuss each in turn.
+When I first tried to join the two data sets together I ran into two hiccups. To make it easier for me to join, I renamed the 'state' variable in the Education data set to 'state_po' so I could join them by 'state_po'. The other hiccup I noticed was that there was no data showing for Connecticut. This was because in the Education data set, the initials for Connecticut were "CN". I had to change this to "CT" to get all the proper data. I used a full join because I wanted to see all of the data from the two data sets before I manipulated it to see everything I had in my hands. Both the education and the election data sets originally had 51 unique rows (one row for each state + Washington DC) and because I joined them by state, the new joined data set also had 51 unique rows meaning no rows were dropped. There were no row IDs that appeared in one data set but not the other which is why there were 51 row IDs in common between the two data sets.
 
-####  Wrangling
+###  Wrangling
 
 ```{R}
-# your wrangling code
+# (six core dplyr functions)
+# FILTER to get data of only states that voted for the Democratic candidate
+EduElect %>% filter(Party_Voted == 'Democrat')
 
-# your wrangling code
+# ARRANGE to see which states have the most electoral votes
+EduElect %>% arrange(desc(Electoral_Votes))
 
-# your wrangling code
+# MUTATE to make the variables full numbers instead of in 1000s
+EduElect <- EduElect %>% mutate(Salary = pay*1000) %>% mutate(Population = pop*1000) %>% mutate(State_Spending = dollars*1000)
+
+# SELECT to take away the columns with the variables "in 1000s"
+EduElect <- EduElect %>% select(-pay, -dollars, -pop)
+glimpse(EduElect)
+
+# GROUP BY region to see where states are in the same region
+EduElect %>% group_by(region, state_po) %>% count(state_po)
+
+# SUMMARIZE to find the total electoral votes cast in the election
+EduElect %>% summarize(sum(Electoral_Votes))
 ```
 
-Your discussion of wrangling section here. Feel encouraged to break up into more than once code chunk and discuss each in turn.
+```{R Summary}
+# summary statistics
+# mean
+EduElect %>% summarize_if(is.numeric, mean, na.rm = TRUE)
+
+# sd
+EduElect %>% summarize_if(is.numeric, sd, na.rm = TRUE)
+
+# var
+EduElect %>% summarize_if(is.numeric, var, na.rm = TRUE)
+
+# min
+EduElect %>% summarize_if(is.numeric, min, na.rm = TRUE)
+
+# max
+EduElect %>% summarize_if(is.numeric, max, na.rm = TRUE)
+
+# categorical variable (region) counts
+EduElect %>% group_by(region) %>% summarize(n())
+
+# categorical variable (Party_Voted) counts
+EduElect %>% group_by(Party_Voted) %>% summarize(n())
+
+# How many NA's are there
+EduElect %>% summarize_all(function(x) sum(is.na(x)))
+
+# Stylish Table
+library(knitr)
+Table <- EduElect %>% group_by(Party_Voted) %>% summarize_if(is.numeric, list(mean=mean, sd=sd))
+Table %>% kable(digits=3, align = 'c', col.names = str_to_title(names(.)))
+```
+
+```{R}
+# How many electoral votes Republicans and Democrats won in the 1992 Presidential Election
+EduElect %>% group_by(Party_Voted) %>% summarize(sum(Electoral_Votes))
+
+# Average State Spending on Public Education based on how states voted
+EduElect %>% group_by(Party_Voted) %>% summarize(mean(State_Spending))
+
+# Average teacher's salary based on how states voted
+EduElect %>% group_by(Party_Voted) %>% summarize(mean(Salary))
+
+# Is a state's average teacher's salary and Average State Spending on Public Education higher than the national average with how states voted and region
+EduElect %>% filter(Salary >= mean(Salary)) %>% select(region, state_po, Party_Voted, Salary) %>% arrange(desc(Salary))
+EduElect %>% filter(State_Spending >= mean(State_Spending)) %>% select(region, state_po, Party_Voted, State_Spending) %>% arrange(desc(State_Spending))
+
+# How many electoral votes each party has based on region
+EduElect %>% group_by(region, Party_Voted) %>% summarize(sum(Electoral_Votes))
+```
+
+Using the 6 core dplyr functions, I was able to use FILTER to get data of only states that voted for the Democratic candidate which showed me that 33 states voted for the Democratic candidate, ARRANGE to see which states have the most electoral votes which showed me that CA, NY, and TX are the three states with the most electoral votes, MUTATE to make the variables full numbers instead of in 1000s, SELECT to take away the columns with the variables "in 1000s", GROUP BY region to see where states are in the same region, and SUMMARIZE to find the total electoral votes cast in the election which was 538. Using the summarize_if function, I was able to get the mean, sd, var, min, and max of all of the the numerical variables which I was then able to create a table of the mean and sd of those variables based off the political party. I also get the counts of the categorical variables which showed me that there are 5 ENC states, 4 ESC states, 3 MA states, 8 MTN states, 6 NE states, 5 PAC states, 9 SA states, 7 WNC states, and 4 WSC states as well as 33 states that voted for the Democratic candidate while 18 states voted for the Republican candidate.
+
+What was really interesting to look at was the exploratory analysis I did on how the average state spending on public education and the average teacher's salary were correlated to the political party of the candidate the state voted for (de facto political party). Looking at this it was quite clear that states that voted for the Democratic candidate on average spent more on education than the states that voted for the Republican candidate as the mean state spending on public education per student was \$5573.78 for Democratic states while it was only \$4445.28 for Republican states. Furthermore, the average teacher's salary in a Democratic state was \$32484.85	while the average teacher's salary in a Republican state was only \$28111.11. It was also interesting to see that out of the top 17 states in mean teacher's salary, 16 were Democratic, but the top state was actually a Republican state. Similarly, only 1 out of the top 15 states in state spending on public education was Republican.
 
 
-#### Visualizing
+### Visualizing
 
 ```{R}
 # your plot 1
+EduElect %>% ggplot(aes(x = Electoral_Votes)) + geom_histogram(aes(fill = region), breaks = seq(0, 60, 5)) + scale_x_continuous(breaks = seq(0, 60, 10)) + scale_y_continuous(breaks = seq(0, 20, 1)) + ggtitle("Histogram of Counts of Electoral Votes") + xlab("Number of Electoral Votes") + ylab("Count of States") + theme_bw()
 ```
-
-Your discussion of plot 1
+The first plot I made was a histogram of the counts of electoral votes. This histogram essentially plots out how many electoral votes the different states have in the USA. It is clear that this histogram is unimodal and skewed to the right with a min of ~3 electoral votes with a high of ~54 electoral votes with a median of ~13 electoral votes. I also filled in the bars based on region which was interesting because it showed most of the states that near the low end of number of electoral votes are from the Mountain region and the West North Central region.
 
 ```{R}
 # your plot 2
+EduElect %>% ggplot(aes(x=Party_Voted, y = State_Spending)) + geom_bar(aes(y=State_Spending,fill=Party_Voted, width=0.6), stat = 'summary', fun = mean) + geom_errorbar(stat = 'summary', fun.data = mean_se, width=0.3) + scale_fill_manual("Political Party", values = c("Democrat" = "blue", "Republican" = "red")) + scale_y_continuous(breaks = seq(0, 6000, 500)) + ggtitle("Bar Graph of State Spending on Education") + xlab("Political Party") + ylab("Average Dollars Spent Per Student ($)") + theme_bw()
 ```
 
-Your discussion of plot 2
+The second plot I made was a bar graph on average state spending on education. I grouped my bars based on Political party and saw that Democratic States spend on average ~\$5500 per student on public education while Republican states spend on average ~\$4500 per student on public education. The error bars show me that even accounting for SE, Democratic states still spend more than Republican states on average on public education.
 
 ```{R}
 # your plot 3
+EduElect %>% ggplot(aes(x = SATV, y = SATM)) + geom_point(aes(color = Party_Voted)) + geom_smooth(aes(group=Party_Voted, color= Party_Voted), method = 'lm', se=FALSE) + scale_color_manual("Political Party Voted For", values = c("Democrat" = "blue", "Republican" = "red")) + theme_bw() + scale_x_continuous(breaks = seq(350, 550, 50)) + scale_y_continuous(breaks = seq(400, 600, 50)) + ggtitle("Scatter Plot of Average SAT Scores with Political Party Voted For") + xlab("Average SAT Verbal Score") + ylab("Average SAT Math Score")
 ```
 
-Your discussion of plot 3
-
-#### Concluding Remarks
-
-If any!
-
+The third plot I made was a scatter plot which plotted the average SAT verbal score per state on the X axis and the average SAT math score per state on the Y axis while grouping by political party of each state. The scatter plot shows a strong, positive and linear relationship between average SAT verbal and math scores. The grouping of political parties shows there is no strong correlation that the states political party is correlated to both verbal or math SAT scores. 
 
 
 
